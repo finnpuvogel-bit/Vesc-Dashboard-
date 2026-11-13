@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#484848">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>VESC RT DATA</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700&family=Roboto:wght@300;400;500;700&family=Roboto+Condensed:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root { --u: 0.4px; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #262626; color: #fff;
+    font-family: 'Roboto', -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    -webkit-user-select: none; user-select: none; overscroll-behavior: none; }
+  #app { max-width: 560px; margin: 0 auto; height: 100vh; height: 100dvh; display: flex; flex-direction: column; background: #262626; }
+
+  /* ---------- Tab-Leiste ---------- */
+  .topbar { background: #484848; padding-top: env(safe-area-inset-top, 0px); flex: none; }
+  .tabs { display: flex; }
+  .tabs button { flex: 1; height: 54px; background: none; border: 0; border-bottom: 4px solid transparent; color: #fff;
+    font: 500 19px/1 'Roboto', sans-serif; letter-spacing: .02em; cursor: pointer; }
+  .tabs button.active { color: #2b9fe0; border-bottom-color: #2b9fe0; }
+
+  main { flex: 1; min-height: 0; position: relative; }
+  .panel { display: none; position: absolute; inset: 0; overflow-y: auto; }
+  .panel.active { display: block; }
+
+  /* ---------- Stage (feste Koordinaten 1170 x 2090) ---------- */
+  #stage { position: relative; margin: 0 auto; aspect-ratio: 1170 / 2090;
+    width: min(100%, calc((100vh - 215px) * 0.5598));
+    width: min(100%, calc((100dvh - 215px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * 0.5598)); }
+  .dial { position: absolute; aspect-ratio: 1; }
+  .dial svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  .dial text { font-family: 'Roboto', sans-serif; }
+  .lbl { fill: #8f8f8f; font-size: 10.5px; }
+  .ttl { fill: #e9e9e9; font-size: 11.5px; }
+  .val { fill: #fff; font-size: 27px; font-weight: 400; }
+
+  .vesclogo { position: absolute; left: 71.5%; top: 29.8%; width: 18.5%; z-index: 5; pointer-events: none; }
+  .gearbtn { position: absolute; left: 7%; top: 59.2%; width: 10.4%; aspect-ratio: 1; border-radius: 50%; z-index: 6;
+    background: radial-gradient(circle at 50% 35%, #333, #262626); border: calc(var(--u) * 4) solid #3d3d3d;
+    display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .gearbtn svg { width: 56%; height: 56%; fill: #8d8d8d; }
+  .loadrow { position: absolute; left: 68.4%; top: 62.4%; width: 25.1%; z-index: 3; display: flex; align-items: center; gap: 6%;
+    font-size: calc(var(--u) * 36); color: #e8e8e8; }
+  .loadrow i { flex: 1; height: calc(var(--u) * 4); background: #666; display: block; }
+  .dots { position: absolute; left: 95.2%; top: 89.2%; width: 2.2%; z-index: 3; }
+  .dots b { display: block; aspect-ratio: 1; border-radius: 50%; background: #777; margin-bottom: 78%; }
+  .dots b.on { background: #fff; }
+
+  .odolbl { position: absolute; top: 93.6%; transform: translateX(-50%); font-size: calc(var(--u) * 27); color: #e2e2e2; letter-spacing: .02em; }
+  .odobox { position: absolute; left: 10.5%; width: 78.9%; top: 95.7%; height: 3.1%;
+    border: calc(var(--u) * 2.5) solid #555; border-radius: calc(var(--u) * 10); background: #212121;
+    display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; text-align: center; }
+  .odobox span { font: 700 calc(var(--u) * 36)/1 'Orbitron', 'Roboto Mono', monospace; color: #ececec;
+    text-shadow: 0 0 calc(var(--u) * 10) rgba(255,255,255,.55); letter-spacing: .04em; }
+
+  /* ---------- Aktionsleiste + untere Leiste ---------- */
+  .actions { flex: none; display: flex; gap: 10px; padding: 7px 12px; background: #2d2d2d; border-top: 1px solid #3c3c3c; }
+  .btn { flex: 1; height: 38px; border-radius: 8px; border: 1.5px solid #2b9fe0; background: #1f3a4d; color: #dff3ff;
+    font: 700 15px/1 'Roboto', sans-serif; letter-spacing: .06em; cursor: pointer; }
+  .btn.on { background: #2b9fe0; color: #fff; }
+  .btn:active { filter: brightness(1.25); }
+  .actions .btn { font-size: 13px; letter-spacing: .02em; padding: 0 4px; }
+  .actions { gap: 6px; }
+
+  .bottombar { flex: none; display: grid; grid-template-columns: 19% 1fr 19%; background: #484848;
+    padding-bottom: env(safe-area-inset-bottom, 0px); height: calc(64px + env(safe-area-inset-bottom, 0px)); }
+  .bottombar > div { display: flex; align-items: center; justify-content: center; height: 64px; }
+  .bottombar > div + div { border-left: 1px solid #5f5f5f; }
+  #status { font-size: 20px; color: #e3e3e3; text-align: center; padding: 0 8px; cursor: pointer; line-height: 1.15; }
+  #status.ok { color: #6fe0a0; }
+  #status.warn { color: #ffcc66; }
+  #gear2 { cursor: pointer; }
+  #gear2 svg { width: 38px; height: 38px; fill: #fff; }
+  #can { font: 700 33px/1 'Roboto Condensed', 'Roboto', sans-serif; color: #fff; flex-direction: column; gap: 0; transition: color .2s; }
+  #can svg { width: 40px; height: 10px; margin-top: -3px; }
+  #can.live { color: #3cc0ff; text-shadow: 0 0 10px rgba(60,192,255,.7); }
+
+  /* ---------- Info-Seiten ---------- */
+  .page { padding: 22px 20px 30px; color: #ddd; line-height: 1.5; font-size: 15px; }
+  .page h2 { font-size: 20px; font-weight: 500; color: #fff; margin: 0 0 10px; }
+  .page p { margin: 0 0 12px; color: #bdbdbd; }
+  .page ul { margin: 0 0 14px; padding-left: 18px; color: #bdbdbd; }
+  .page .card { background: #303030; border: 1px solid #444; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+
+  /* ---------- Einstellungen ---------- */
+  #settings { position: fixed; inset: 0; background: rgba(0,0,0,.72); display: none; z-index: 50; align-items: flex-end; justify-content: center; }
+  #settings.open { display: flex; }
+  #sheet { width: 100%; max-width: 560px; max-height: 88dvh; overflow-y: auto; background: #2d2d2d; border-radius: 16px 16px 0 0;
+    padding: 18px 18px calc(22px + env(safe-area-inset-bottom, 0px)); -webkit-user-select: text; user-select: text; }
+  #sheet label { display: block; font-size: 13px; color: #aaa; margin: 12px 0 4px; }
+  #sheet input, #sheet select { width: 100%; height: 40px; border-radius: 8px; background: #1e1e1e; border: 1px solid #555; color: #fff; padding: 0 10px; font-size: 16px; }
+  #logbox { width: 100%; height: 170px; background: #151515; border: 1px solid #444; border-radius: 8px; color: #9fe0b5;
+    font: 11px/1.35 ui-monospace, Menlo, monospace; padding: 8px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+
+  /* ---------- Hex-Log-Fenster ---------- */
+  #hexlog { position: fixed; left: 8px; right: 8px; max-width: 544px; margin: 0 auto; z-index: 40; display: none; flex-direction: column;
+    bottom: calc(64px + 52px + env(safe-area-inset-bottom, 0px)); height: 38vh; min-height: 180px;
+    background: rgba(14,14,14,.95); border: 1px solid #4a4a4a; border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.6); }
+  #hexlog.open { display: flex; }
+  #hexlog header { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid #3a3a3a; }
+  #hxstat { flex: 1; font: 11px/1.2 ui-monospace, Menlo, monospace; color: #9aa; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  #hexlog header button { height: 28px; padding: 0 9px; border-radius: 6px; border: 1px solid #555; background: #262626; color: #ddd; font: 700 11px/1 'Roboto', sans-serif; }
+  #hexlog header button.on { background: #7a4a12; border-color: #d89a3a; }
+  #hxbody { flex: 1; overflow-y: auto; padding: 6px 8px; font: 11px/1.4 ui-monospace, Menlo, monospace; word-break: break-all;
+    -webkit-user-select: text; user-select: text; }
+  #hxbody .RX { color: #8fe3a8; } #hxbody .TX { color: #6fc3ff; } #hxbody .INFO { color: #c9c9c9; } #hxbody .ERR { color: #ff8a8a; }
+  #hxbody .ts { color: #777; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <nav class="tabs">
+      <button data-tab="start">START</button>
+      <button data-tab="rt" class="active">RT DATA</button>
+      <button data-tab="profiles">PROFILES</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- START -->
+    <section id="tab-start" class="panel">
+      <div class="page">
+        <h2>Verbindung</h2>
+        <div class="card">
+          <p>Tippe unten auf <b>BLUETOOTH</b>, wähle dein Gerät aus und warte, bis der Status „Connected“ anzeigt. Auf dem iPhone brauchst du den Browser <b>Bluefy</b> (Safari unterstützt kein WebBluetooth). Die Seite muss über HTTPS laufen – GitHub Pages passt.</p>
+          <p style="margin:0">Ohne Hardware kannst du mit <b>DEMO</b> alle Instrumente testen.</p>
+        </div>
+        <h2>Was wird gelesen?</h2>
+        <div class="card">
+          <ul>
+            <li><b>VESC über BLE-UART</b> (VESC Express, nRF-UART, HM-10/BT05-Modul): vollständig, per COMM_GET_VALUES.</li>
+            <li><b>Ninebot-Originalprotokoll</b>: wird erkannt und im Log protokolliert. Neuere Modelle verschlüsseln die Daten, dann kommen keine lesbaren Werte an.</li>
+          </ul>
+          <p style="margin:0">Polpaare, Raddurchmesser, Zellenzahl und Akkukapazität stellst du über das Zahnrad ein.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- RT DATA -->
+    <section id="tab-rt" class="panel active">
+      <div id="stage">
+        <div class="vesclogo">
+          <svg viewBox="0 0 230 52" xmlns="http://www.w3.org/2000/svg">
+            <g fill="#5c5c5c"><polygon points="2,50 10,2 18,2 10,50"/><polygon points="16,50 24,2 32,2 24,50"/><polygon points="30,50 38,2 46,2 38,50"/></g>
+            <text x="50" y="44" font-family="'Arial Black', Impact, 'Roboto', sans-serif" font-weight="900" font-style="italic" font-size="50" fill="#5c5c5c" textLength="150" lengthAdjust="spacingAndGlyphs">VESC</text>
+            <text x="204" y="14" font-family="Arial, sans-serif" font-size="12" fill="#5c5c5c">®</text>
+          </svg>
+        </div>
+        <div class="gearbtn" id="gear1" title="Einstellungen">
+          <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        </div>
+        <div class="loadrow"><i></i><span id="loadpct">0%</span><i></i></div>
+        <div class="dots"><b></b><b class="on"></b><b></b><b></b></div>
+
+        <div class="odolbl" style="left:23.6%">ODOMETER</div>
+        <div class="odolbl" style="left:49.9%">TRIP</div>
+        <div class="odolbl" style="left:76.2%">UP-TIME</div>
+        <div class="odobox"><span id="odo">0.0</span><span id="trip">0.0</span><span id="uptime">00:00:00</span></div>
+      </div>
+    </section>
+
+    <!-- PROFILES -->
+    <section id="tab-profiles" class="panel">
+      <div class="page">
+        <h2>Profile</h2>
+        <div class="card">
+          <p style="margin:0">Hier speichert die Seite deine Fahrzeugprofile (Polpaare, Rad, Zellen, Kapazität). Aktuell gilt ein Profil – ändere es über das Zahnrad.</p>
+        </div>
+        <div class="card" id="profileInfo"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="actions">
+    <button class="btn" id="btnDemo">▶ DEMO</button>
+    <button class="btn" id="btnBle">BLUETOOTH</button>
+    <button class="btn" id="btnLog" style="flex:.5">LOG</button>
+    <button class="btn" id="btnListen" style="flex:.9">LAUSCHEN</button>
+  </div>
+
+  <footer class="bottombar">
+    <div id="gear2" title="Einstellungen"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg></div>
+    <div id="status">Not connected</div>
+    <div id="can"><span>CAN</span><svg viewBox="0 0 40 10"><path d="M0 5H34M29 1l6 4-6 4" stroke="currentColor" stroke-width="2" fill="none"/></svg></div>
+  </footer>
+</div>
+
+<!-- Hex-Log -->
+<div id="hexlog">
+  <header>
+    <span id="hxstat">v3 | RX 0</span>
+    <button id="hxPause">PAUSE</button>
+    <button id="hxClear">LEER</button>
+    <button id="hxCopy">KOPIE</button>
+    <button id="hxClose">✕</button>
+  </header>
+  <div id="hxbody"></div>
+</div>
+
+<!-- Einstellungen -->
+<div id="settings">
+  <div id="sheet">
+    <div class="flex items-center justify-between mb-1">
+      <h2 class="text-xl font-medium">Einstellungen</h2>
+      <button id="closeSettings" class="text-2xl px-2" aria-label="Schließen">✕</button>
+    </div>
+    <label>Motor-Polpaare (Nabenmotor typisch 15)</label>
+    <input id="s_pp" type="number" min="1" max="60" step="1">
+    <label>Raddurchmesser (Zoll)</label>
+    <input id="s_wheel" type="number" min="4" max="30" step="0.1">
+    <label>Akkuzellen in Serie (S)</label>
+    <input id="s_cells" type="number" min="3" max="30" step="1">
+    <label>Akkukapazität (Wh) – für die Reichweite</label>
+    <input id="s_wh" type="number" min="50" max="5000" step="10">
+    <label>Protokoll</label>
+    <select id="s_proto">
+      <option value="auto">Auto (erst VESC, dann Ninebot)</option>
+      <option value="vesc">Nur VESC</option>
+      <option value="ninebot">Nur Ninebot (55 AA, Klartext)</option>
+      <option value="sniff">Nur mitlesen (nichts senden)</option>
+    </select>
+    <label>Eigene Service-UUID (optional, vor dem Verbinden eintragen)</label>
+    <input id="s_uuid" type="text" placeholder="z. B. 0000abf0-0000-1000-8000-00805f9b34fb" autocapitalize="off" autocorrect="off">
+    <label>Ninebot-Registerkarte (JSON, Byte-Offsets dezimal, little-endian)</label>
+    <textarea id="s_nbmap" rows="9" spellcheck="false" autocapitalize="off" style="width:100%;background:#1e1e1e;border:1px solid #555;border-radius:8px;color:#fff;font:11px/1.4 ui-monospace,Menlo,monospace;padding:8px"></textarea>
+    <div class="flex gap-2 mt-2">
+      <button class="btn" id="btnMapReset">STANDARD</button>
+      <button class="btn" id="btnScan">REGISTER-SCAN</button>
+    </div>
+    <div class="flex gap-2 mt-4">
+      <button class="btn" id="btnClearLog">LOG LEEREN</button>
+      <button class="btn" id="btnCopyLog">LOG KOPIEREN</button>
+    </div>
+    <label>Verbindungs-Log</label>
+    <div id="logbox"></div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   VESC RT DATA – Dashboard
+   ===================================================================== */
+const W = 1170, H = 2090;
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+/* ---------- Einstellungen ---------- */
+const defaults = { pp: 15, wheel: 10, cells: 10, wh: 500, proto: 'auto', uuid: '', nbmap: '' };
+let S = { ...defaults };
+try { S = { ...defaults, ...JSON.parse(localStorage.getItem('vescRT') || '{}') }; } catch (e) {}
+function saveS() { try { localStorage.setItem('vescRT', JSON.stringify(S)); } catch (e) {} renderProfile(); }
+
+/* ---------- Zustand ---------- */
+const st = { speed: 0, current: 0, power: 0, duty: 0, vin: 0, pct: 0, tEsc: 0, tMotor: 0,
+             cons: 0, avgCons: 0, range: 0, rangeInf: true, load: 0, odo: 0, trip: 0, wh: 0, up: 0 };
+let mode = 'idle';           // idle | demo | ble
+let lastData = 0;
+
+function resetState() {
+  Object.assign(st, { speed: 0, current: 0, power: 0, duty: 0, vin: 0, pct: 0, tEsc: 0, tMotor: 0,
+    cons: 0, avgCons: 0, range: 0, rangeInf: true, load: 0, odo: 0, trip: 0, wh: 0, up: 0 });
+}
+
+/* =====================================================================
+   Rundinstrumente
+   ===================================================================== */
+const stage = $('stage');
+const DIALS = {};
+const BLUE = '#35b3e6';
+
+const lin = (a0, k) => (v) => a0 + v * k;
+const asym = (a0, kPos, kNeg, maxV) => (v) => a0 + (v >= 0 ? v / maxV * kPos : v / maxV * kNeg);
+
+const range = (a, b, s) => { const r = []; for (let v = a; v <= b + 1e-9; v += s) r.push(Math.round(v * 1000) / 1000); return r; };
+const nfmt = (dec) => (x) => { const s = x.toFixed(dec); return (s === '-0' || s === '-0.0') ? s.slice(1) : s; };
+
+const CFG = {
+  current: { cx: 272, cy: 315, r: 225, z: 1, min: -60, max: 60, minor: 2, major: 10, ang: asym(180, 105, 120, 60),
+    labels: range(-60, 60, 10).map(v => [v, String(v)]), color: '#cdbb3f', fmt: nfmt(1),
+    texts: [{ x: 0, y: -25, c: 'ttl', t: 'CURRENT' }, { id: 'v', x: 0, y: 1, c: 'val', t: '0' }, { x: 0, y: 25, c: 'ttl', t: 'A' }] },
+  duty: { cx: 896, cy: 315, r: 225, z: 1, min: -100, max: 100, minor: 5, major: 25, ang: (v) => v >= 0 ? -(v / 100 * 105) : -(v / 100 * 120),
+    labels: range(-100, 100, 25).map(v => [v, String(v)]), color: '#6a3fb8', fmt: nfmt(0),
+    texts: [{ x: 0, y: -25, c: 'ttl', t: 'DUTY' }, { id: 'v', x: 0, y: 1, c: 'val', t: '0' }, { x: 0, y: 25, c: 'ttl', t: '%' }] },
+  power: { cx: 584, cy: 265, r: 238, z: 3, min: -10000, max: 10000, minor: 500, major: 2000, ang: (v) => -90 + v / 1000 * 14,
+    labels: range(-10, 10, 2).map(v => [v * 1000, v + 'k']), color: BLUE, fmt: nfmt(0),
+    texts: [{ x: 0, y: -24, c: 'ttl', t: 'POWER' }, { id: 'v', x: 0, y: 1, c: 'val', t: '0' }, { x: 0, y: 27, c: 'ttl', t: 'W' }] },
+  speed: { cx: 458, cy: 975, r: 405, z: 1, min: 0, max: 60, minor: 2.5, major: 5, ang: lin(45, 4.5),
+    labels: range(0, 60, 10).map(v => [v, String(v)]), color: BLUE, fmt: nfmt(0), lr: 66,
+    texts: [{ x: 0, y: -24, c: 'ttl', t: 'SPEED' }, { id: 'v', x: 0, y: 1, c: 'val', t: '0', fs: 27 }, { x: 0, y: 26, c: 'ttl', t: 'KM/H' }] },
+  battery: { cx: 900, cy: 980, r: 225, z: 3, min: 0, max: 100, minor: 2, major: 10, ang: lin(45, 2.7),
+    labels: range(0, 100, 10).map(v => [v, String(v)]), color: '#d6232a', fmt: () => (st.rangeInf ? '∞' : String(Math.round(st.range))),
+    texts: [{ x: 0, y: -24, c: 'ttl', t: 'BATTERY' }, { id: 'v', x: -2, y: -2, c: 'val', t: '∞' },
+            { x: 60, y: 0, c: 'ttl', t: 'KM RANGE', fs: 8.6 }, { id: 'p', x: 0, y: 29, c: 'val', t: '0%', fs: 15.5 }] },
+  esc: { cx: 272, cy: 1645, r: 225, z: 1, min: 0, max: 110, minor: 4, major: 20, ang: lin(75, 2.25),
+    labels: range(0, 100, 20).map(v => [v, String(v)]), color: BLUE, fmt: nfmt(0),
+    texts: [{ x: 0, y: -38, c: 'ttl', t: 'TEMP' }, { x: 0, y: -23.5, c: 'ttl', t: 'ESC' }, { id: 'v', x: 0, y: 1, c: 'val', t: '0' }, { x: 0, y: 25, c: 'ttl', t: '°C' }] },
+  motor: { cx: 896, cy: 1645, r: 225, z: 1, min: 0, max: 110, minor: 4, major: 20, ang: lin(105, -2.25),
+    labels: range(0, 100, 20).map(v => [v, String(v)]), color: BLUE, fmt: nfmt(0),
+    texts: [{ x: 0, y: -38, c: 'ttl', t: 'TEMP' }, { x: 0, y: -23.5, c: 'ttl', t: 'MOTOR' }, { id: 'v', x: 0, y: 1, c: 'val', t: '0' }, { x: 0, y: 25, c: 'ttl', t: '°C' }] },
+  cons: { cx: 584, cy: 1690, r: 238, z: 3, min: -50, max: 50, minor: 2, major: 10, ang: lin(-90, 2.55),
+    labels: range(-50, 50, 10).map(v => [v, String(v)]), color: BLUE, fmt: nfmt(0),
+    texts: [{ x: 0, y: -24, c: 'ttl', t: 'CONSUMP.' }, { id: 'v', x: 0, y: 1, c: 'val', t: '0' }, { x: 0, y: 28, c: 'ttl', t: 'WH/KM' },
+            { id: 'a', x: 0, y: 51, c: 'val', t: '0' }, { x: 0, y: 77, c: 'ttl', t: 'AVG' }] }
+};
+
+function buildDial(key, c) {
+  const R = 96;
+  let s = `<svg viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="${key}f" cx="50%" cy="35%" r="75%"><stop offset="0" stop-color="#313131"/><stop offset="1" stop-color="#1f1f1f"/></radialGradient>
+      <linearGradient id="${key}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".12"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    </defs>
+    <circle r="98" fill="#2a2a2a"/><circle r="95.5" fill="#3b3b3b"/><circle r="92.5" fill="url(#${key}f)"/><circle r="92.5" fill="url(#${key}g)"/>`;
+  let pm = '', pM = '';
+  const n = Math.round((c.max - c.min) / c.minor);
+  for (let i = 0; i <= n; i++) {
+    const v = c.min + i * c.minor;
+    const a = c.ang(v) * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
+    const major = Math.abs(v / c.major - Math.round(v / c.major)) < 1e-6;
+    const r1 = major ? 79 : 85.5, r2 = 91.5;
+    const seg = `M${(r1 * ca).toFixed(2)} ${(r1 * sa).toFixed(2)}L${(r2 * ca).toFixed(2)} ${(r2 * sa).toFixed(2)}`;
+    if (major) pM += seg; else pm += seg;
+  }
+  s += `<path d="${pm}" stroke="#8c8c8c" stroke-width=".9" fill="none"/><path d="${pM}" stroke="#d2d2d2" stroke-width="1.7" fill="none"/>`;
+  const lr = c.lr || 66;
+  for (const [v, t] of c.labels) {
+    const a = c.ang(v) * Math.PI / 180;
+    s += `<text class="lbl" x="${(lr * Math.cos(a)).toFixed(2)}" y="${(lr * Math.sin(a)).toFixed(2)}" text-anchor="middle" dominant-baseline="central">${t}</text>`;
+  }
+  for (const t of c.texts) {
+    s += `<text ${t.id ? `id="${key}_${t.id}"` : ''} class="${t.c}" x="${t.x}" y="${t.y}" ${t.fs ? `style="font-size:${t.fs}px"` : ''} text-anchor="middle" dominant-baseline="central">${t.t}</text>`;
+  }
+  s += `<g class="needle" transform="rotate(${c.ang(c.min)})"><polygon points="95,-3.6 95,3.6 77,0" fill="${c.color}"/></g></svg>`;
+  return s;
+}
+
+for (const key in CFG) {
+  const c = CFG[key];
+  const el = document.createElement('div');
+  el.className = 'dial';
+  el.style.cssText = `left:${(c.cx - c.r) / W * 100}%;top:${(c.cy - c.r) / H * 100}%;width:${2 * c.r / W * 100}%;z-index:${c.z}`;
+  el.innerHTML = buildDial(key, c);
+  stage.appendChild(el);
+  const d = { c, cur: c.min < 0 ? 0 : c.min, tgt: c.min < 0 ? 0 : c.min, needle: el.querySelector('.needle'), t: {}, ang: null };
+  el.querySelectorAll('text[id]').forEach(t => { d.t[t.id.split('_')[1]] = t; });
+  DIALS[key] = d;
+}
+function setTxt(el, s) { if (el && el.textContent !== s) el.textContent = s; }
+
+function resizeStage() { document.documentElement.style.setProperty('--u', (stage.clientWidth / W) + 'px'); }
+new ResizeObserver(resizeStage).observe(stage);
+resizeStage();
+
+/* =====================================================================
+   Abgeleitete Werte + Render-Schleife
+   ===================================================================== */
+function derive(dt) {
+  if (mode === 'idle') return;
+  st.up += dt;
+  st.trip += Math.abs(st.speed) * dt / 3600;
+  st.wh += st.power * dt / 3600;
+  if (mode === 'demo') st.odo = 128.4 + st.trip;
+  else if (!st.odoFromEsc) st.odo = st.trip;
+  st.cons = st.speed > 2 ? clamp(st.power / st.speed, -50, 50) : 0;
+  st.avgCons = st.trip > 0.03 ? clamp(st.wh / st.trip, 0, 99) : 0;
+  const battWh = S.wh * st.pct / 100;
+  if (st.avgCons > 2) { st.range = battWh / st.avgCons; st.rangeInf = false; } else { st.range = 0; st.rangeInf = true; }
+  st.load = clamp(Math.abs(st.current) / 60 * 100, 0, 100);
+}
+
+function hms(sec) {
+  sec = Math.floor(sec);
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  return [h, m, s].map(x => String(x).padStart(2, '0')).join(':');
+}
+
+let lastT = performance.now();
+function frame(now) {
+  const dt = Math.min(0.1, (now - lastT) / 1000);
+  lastT = now;
+  if (mode === 'demo') demoStep(dt);
+  derive(dt);
+
+  DIALS.speed.tgt = Math.abs(st.speed);
+  DIALS.current.tgt = st.current;
+  DIALS.power.tgt = st.power;
+  DIALS.duty.tgt = st.duty;
+  DIALS.esc.tgt = st.tEsc;
+  DIALS.motor.tgt = st.tMotor;
+  DIALS.cons.tgt = st.cons;
+  DIALS.battery.tgt = st.rangeInf ? st.pct : Math.min(100, st.range);
+
+  const k = 1 - Math.exp(-dt * 11);
+  for (const key in DIALS) {
+    const d = DIALS[key];
+    d.cur += (d.tgt - d.cur) * k;
+    const a = d.c.ang(clamp(d.cur, d.c.min, d.c.max));
+    if (d.ang === null || Math.abs(a - d.ang) > 0.02) { d.ang = a; d.needle.setAttribute('transform', `rotate(${a.toFixed(2)})`); }
+    setTxt(d.t.v, d.c.fmt(d.cur));
+  }
+  setTxt(DIALS.battery.t.p, Math.round(st.pct) + '%');
+  setTxt(DIALS.cons.t.a, String(Math.round(st.avgCons)));
+  setTxt($('loadpct'), Math.round(st.load) + '%');
+  setTxt($('odo'), st.odo.toFixed(1));
+  setTxt($('trip'), st.trip.toFixed(1));
+  setTxt($('uptime'), hms(st.up));
+
+  const live = mode === 'demo' || (mode === 'ble' && performance.now() - lastData < 1500);
+  $('can').classList.toggle('live', live);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* =====================================================================
+   DEMO-Modus
+   ===================================================================== */
+const demo = { t: 0, v: 0, I: 0, te: 24, tm: 22, pct: 94 };
+function startDemo() {
+  if (mode === 'ble') bleDisconnect(true);
+  resetState();
+  Object.assign(demo, { t: 0, v: 0, I: 0, te: 24, tm: 22, pct: 94 });
+  mode = 'demo';
+  st.odoFromEsc = false;
+  setStatus('DEMO MODE', 'ok');
+  updateButtons();
+}
+function stopDemo() {
+  if (mode !== 'demo') return;
+  mode = 'idle'; resetState();
+  setStatus('Not connected');
+  updateButtons();
+}
+function demoStep(dt) {
+  demo.t += dt;
+  const t = demo.t;
+  let tgt = 25 + 17 * Math.sin(t * 0.21) + 9 * Math.sin(t * 0.57 + 1.3) + 4 * Math.sin(t * 1.3);
+  if (t < 1.5) tgt = 0;
+  tgt = clamp(tgt, 0, 52);
+  const acc = clamp((tgt - demo.v) * 0.6, -9, 7);      // km/h pro s
+  demo.v = Math.max(0, demo.v + acc * dt);
+  let I = 2 + demo.v * 0.35 + acc * 2.4;
+  if (acc < -2) I = -Math.min(14, (-acc - 2) * 2.2);
+  I = clamp(I, -14, 58);
+  demo.I += (I - demo.I) * Math.min(1, dt * 8);
+  const cellV = 4.1 - (94 - demo.pct) / 94 * 0.7 - demo.I * 0.0015;
+  const vin = cellV * S.cells;
+  const power = vin * demo.I;
+  demo.te += ((24 + Math.abs(demo.I) * 0.9) - demo.te) * dt * 0.06;
+  demo.tm += ((22 + Math.abs(demo.I) * 1.5) - demo.tm) * dt * 0.05;
+  demo.pct = Math.max(5, demo.pct - dt * 0.015 - Math.max(power, 0) / 1000 * dt * 0.0025);
+  st.speed = demo.v; st.current = demo.I; st.power = power; st.vin = vin;
+  st.duty = clamp(demo.v / 55 * 92 + Math.max(demo.I, 0) * 0.08, 0, 100);
+  st.tEsc = demo.te; st.tMotor = demo.tm; st.pct = demo.pct;
+  lastData = performance.now();
+}
+
+/* =====================================================================
+   Status / Log / Buttons
+   ===================================================================== */
+function setStatus(t, cls) { const s = $('status'); s.textContent = t; s.className = cls || ''; }
+const logLines = [];
+function log(msg) {
+  const d = new Date();
+  const ts = [d.getHours(), d.getMinutes(), d.getSeconds()].map(x => String(x).padStart(2, '0')).join(':');
+  logLines.push(ts + ' ' + msg);
+  try { hexLog('INFO', msg); } catch (e) {}
+  if (logLines.length > 300) logLines.shift();
+  const box = $('logbox');
+  box.textContent = logLines.join('\n');
+  box.scrollTop = box.scrollHeight;
+}
+const hex = (b) => Array.from(b).map(x => x.toString(16).padStart(2, '0')).join(' ');
+
+/* ---------- Hex-Log-Fenster ---------- */
+const hx = { lines: [], paused: false, open: false, dirty: false };
+function hexLog(dir, data, note) {
+  if (hx.paused) return;
+  const d = new Date();
+  const ts = [d.getHours(), d.getMinutes(), d.getSeconds()].map(x => String(x).padStart(2, '0')).join(':') + '.' + String(d.getMilliseconds()).padStart(3, '0');
+  const txt = typeof data === 'string' ? data : hex(data) + (note ? '   <- ' + note : '');
+  hx.lines.push({ ts, dir, txt });
+  if (hx.lines.length > 500) hx.lines.shift();
+  hx.dirty = true;
+}
+const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function renderHex() {
+  const body = $('hxbody');
+  const nearEnd = body.scrollHeight - body.scrollTop - body.clientHeight < 40;
+  body.innerHTML = hx.lines.slice(-250).map(l => `<div class="${l.dir}"><span class="ts">${l.ts}</span> ${l.dir} ${esc(l.txt)}</div>`).join('');
+  if (nearEnd) body.scrollTop = body.scrollHeight;
+}
+setInterval(() => {
+  if (!hx.open) return;
+  $('hxstat').textContent = `v3 | RX ${ble.rawCount} | NB ok ${ble.nbOk} bad ${ble.nbBad} | VESC ${ble.vescFrames}`;
+  if (hx.dirty) { hx.dirty = false; renderHex(); }
+}, 200);
+function toggleHex(open) {
+  hx.open = open === undefined ? !hx.open : open;
+  $('hexlog').classList.toggle('open', hx.open);
+  $('btnLog').classList.toggle('on', hx.open);
+  if (hx.open) { hx.dirty = true; }
+}
+$('btnLog').addEventListener('click', () => toggleHex());
+$('btnListen').addEventListener('click', () => {
+  if (mode === 'ble') { hexLog('ERR', 'Erst trennen, dann Lauschen ein-/ausschalten.'); toggleHex(true); return; }
+  S.proto = S.proto === 'sniff' ? 'auto' : 'sniff';
+  saveS(); updateButtons();
+  setStatus(S.proto === 'sniff' ? 'Modus: nur lauschen' : 'Not connected');
+});
+$('hxClose').addEventListener('click', () => toggleHex(false));
+$('hxClear').addEventListener('click', () => { hx.lines.length = 0; $('hxbody').innerHTML = ''; });
+$('hxPause').addEventListener('click', () => { hx.paused = !hx.paused; $('hxPause').classList.toggle('on', hx.paused); $('hxPause').textContent = hx.paused ? 'WEITER' : 'PAUSE'; });
+$('hxCopy').addEventListener('click', async () => {
+  const t = hx.lines.map(l => `${l.ts} ${l.dir} ${l.txt}`).join('\n');
+  try { await navigator.clipboard.writeText(t); hexLog('INFO', 'In Zwischenablage kopiert'); }
+  catch (e) { const r = document.createRange(); r.selectNodeContents($('hxbody')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); }
+});
+function updateButtons() {
+  $('btnDemo').classList.toggle('on', mode === 'demo');
+  $('btnDemo').textContent = mode === 'demo' ? '■ DEMO STOPPEN' : '▶ DEMO';
+  $('btnListen').classList.toggle('on', S.proto === 'sniff');
+  $('btnListen').textContent = S.proto === 'sniff' ? 'LAUSCHEN AN' : 'LAUSCHEN';
+  $('btnBle').classList.toggle('on', mode === 'ble');
+  $('btnBle').textContent = mode === 'ble' ? 'TRENNEN' : 'BLUETOOTH';
+}
+function renderProfile() {
+  $('profileInfo').innerHTML = `<p style="margin:0"><b>Aktives Profil</b><br>Polpaare: ${S.pp}<br>Rad: ${S.wheel}"<br>Akku: ${S.cells}S, ${S.wh} Wh<br>Protokoll: ${S.proto}</p>`;
+}
+renderProfile();
+
+/* Tabs */
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + b.dataset.tab));
+}));
+
+/* Einstellungen */
+function openSettings() {
+  $('s_pp').value = S.pp; $('s_wheel').value = S.wheel; $('s_cells').value = S.cells; $('s_wh').value = S.wh;
+  $('s_proto').value = S.proto; $('s_uuid').value = S.uuid; $('s_nbmap').value = nbMapText(getNbMap());
+  $('logbox').textContent = logLines.join('\n');
+  $('settings').classList.add('open');
+}
+$('gear1').addEventListener('click', openSettings);
+$('gear2').addEventListener('click', openSettings);
+$('closeSettings').addEventListener('click', () => $('settings').classList.remove('open'));
+$('settings').addEventListener('click', (e) => { if (e.target.id === 'settings') $('settings').classList.remove('open'); });
+['pp', 'wheel', 'cells', 'wh'].forEach(k => $('s_' + k).addEventListener('change', (e) => { const v = parseFloat(e.target.value); if (v > 0) { S[k] = v; saveS(); } }));
+$('s_proto').addEventListener('change', (e) => { S.proto = e.target.value; saveS(); updateButtons(); });
+$('s_uuid').addEventListener('change', (e) => { S.uuid = e.target.value.trim().toLowerCase(); saveS(); });
+$('btnClearLog').addEventListener('click', () => { logLines.length = 0; $('logbox').textContent = ''; });
+$('btnCopyLog').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(logLines.join('\n')); log('Log kopiert'); }
+  catch (e) { const r = document.createRange(); r.selectNodeContents($('logbox')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+});
+
+$('btnDemo').addEventListener('click', () => { mode === 'demo' ? stopDemo() : startDemo(); });
+$('btnBle').addEventListener('click', () => { mode === 'ble' ? bleDisconnect(true) : bleConnect(); });
+$('s_nbmap').addEventListener('change', (e) => {
+  try {
+    const o = JSON.parse(e.target.value);
+    if (typeof o !== 'object' || Array.isArray(o)) throw new Error('kein Objekt');
+    S.nbmap = JSON.stringify(o); saveS(); e.target.style.borderColor = '#555'; log('Registerkarte gespeichert');
+  } catch (err) { e.target.style.borderColor = '#d33'; log('Registerkarte ungültig: ' + err.message); }
+});
+$('btnMapReset').addEventListener('click', () => { S.nbmap = ''; saveS(); $('s_nbmap').value = nbMapText(NB_MAP_DEFAULT); $('s_nbmap').style.borderColor = '#555'; });
+$('btnScan').addEventListener('click', () => { $('settings').classList.remove('open'); toggleHex(true); nbScan(); });
+$('status').addEventListener('click', () => { if (mode === 'idle') bleConnect(); });
+
+/* =====================================================================
+   WebBluetooth
+   ===================================================================== */
+const BASE = (x) => `0000${x}-0000-1000-8000-00805f9b34fb`;
+const NUS = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const NUS_RX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';   // Schreiben zum Gerät
+const NUS_TX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';   // Notify vom Gerät
+const KNOWN_SERVICES = [
+  NUS, BASE('ffe0'), BASE('ffe5'), BASE('fff0'), BASE('ff00'), BASE('fee7'), BASE('ae00'), BASE('fe95'),
+  '49535343-fe7d-4ae5-8fa9-9fafd205e455', '6e400001-b5a3-f393-e0a9-e50e24dcca9f',
+  'battery_service', 'device_information', 'generic_access'
+];
+const GENERIC = ['00001800', '00001801', '0000180a', '0000180f'];
+
+const ble = { device: null, tx: null, timer: null, busy: false, manual: false, retries: 0, rawCount: 0, vescFrames: 0, nbFrames: 0, warned: false };
+let rb = [];
+
+function crc16(buf) {
+  let crc = 0;
+  for (const b of buf) {
+    crc ^= b << 8;
+    for (let i = 0; i < 8; i++) crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff;
+  }
+  return crc;
+}
+function vescPacket(payload) {
+  const c = crc16(payload);
+  return new Uint8Array([2, payload.length, ...payload, c >> 8, c & 255, 3]);
+}
+const REQ_VALUES = vescPacket([4]);   // COMM_GET_VALUES
+
+async function bleConnect() {
+  if (!navigator.bluetooth) {
+    alert('WebBluetooth ist in diesem Browser nicht verfügbar.\nAuf dem iPhone: Browser „Bluefy“ nutzen. Auf Android/Desktop: Chrome oder Edge.');
+    return;
+  }
+  stopDemo();
+  ble.manual = false; ble.retries = 0;
+  setStatus('Suche Gerät…', 'warn');
+  const services = KNOWN_SERVICES.slice();
+  if (S.uuid) services.push(S.uuid);
+  try {
+    ble.device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: services });
+  } catch (e) {
+    log('Geräteauswahl abgebrochen: ' + e.message);
+    setStatus('Not connected');
+    return;
+  }
+  ble.device.addEventListener('gattserverdisconnected', onDisc);
+  try {
+    await bleOpen();
+  } catch (e) {
+    log('Verbindung fehlgeschlagen: ' + e.message);
+    setStatus('Verbindung fehlgeschlagen', 'warn');
+    cleanupBle();
+  }
+}
+
+function withTimeout(p, ms, what) {
+  return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout: ' + what)), ms))]);
+}
+
+async function bleOpen() {
+  setStatus('Verbinde…', 'warn');
+  const server = await withTimeout(ble.device.gatt.connect(), 12000, 'GATT connect');
+  log('GATT verbunden: ' + (ble.device.name || ble.device.id));
+  let svcs = [];
+  try { svcs = await withTimeout(server.getPrimaryServices(), 10000, 'Services'); }
+  catch (e) { throw new Error('Keine bekannten UART-Services gefunden. Service-UUID des Geräts in den Einstellungen eintragen. (' + e.message + ')'); }
+  if (!svcs.length) throw new Error('Gerät bietet keinen bekannten Service an – eigene UUID in den Einstellungen eintragen.');
+
+  let tx = null, preferred = null;
+  const notifiers = [];
+  for (const s of svcs) {
+    log('Service ' + s.uuid);
+    const generic = GENERIC.some(g => s.uuid.startsWith(g));
+    let chars = [];
+    try { chars = await s.getCharacteristics(); } catch (e) { log('  Characteristics nicht lesbar: ' + e.message); }
+    for (const c of chars) {
+      const p = c.properties;
+      log('  ' + c.uuid + ' [' + ['read', 'write', 'writeNR', 'notify', 'indicate'].filter((n, i) => [p.read, p.write, p.writeWithoutResponse, p.notify, p.indicate][i]).join(',') + ']');
+      if (generic) continue;
+      if (p.notify || p.indicate) notifiers.push(c);
+      if (p.write || p.writeWithoutResponse) {
+        if (c.uuid === NUS_RX) preferred = c;
+        if (!tx) tx = c;
+      }
+    }
+  }
+  ble.tx = preferred || tx;
+  if (!notifiers.length) throw new Error('Keine Notify-Characteristic gefunden.');
+  for (const c of notifiers) {
+    try {
+      await c.startNotifications();
+      c.addEventListener('characteristicvaluechanged', onData);
+      log('Notify aktiv: ' + c.uuid);
+    } catch (e) { log('Notify fehlgeschlagen ' + c.uuid + ': ' + e.message); }
+  }
+  if (ble.tx) log('Schreib-Characteristic: ' + ble.tx.uuid);
+
+  resetState();
+  rb = [];
+  Object.assign(ble, { rawCount: 0, vescFrames: 0, nbFrames: 0, nbEs: 0, nbOk: 0, nbBad: 0, nbTimeouts: 0, vescTx: 0, warned: false, warnedNb: false, warnedNoData: false, retries: 0,
+    pending: null, txLogged: 0, nbRb: [], regs: { esc: {}, bms: {} }, scanning: false,
+    active: (S.proto === 'auto' || S.proto === 'vesc') ? 'vesc' : S.proto, t0: performance.now(), tNb: performance.now() });
+  mode = 'ble';
+  st.odoFromEsc = false;
+  lastData = 0;
+  setStatus('Connected: ' + (ble.device.name || 'BLE'), 'ok');
+  updateButtons();
+  clearInterval(ble.timer);
+  ble.timer = setInterval(poll, 100);
+}
+
+async function bleSend(bytes) {
+  if (ble.tx.properties.writeWithoutResponse && ble.tx.writeValueWithoutResponse) await ble.tx.writeValueWithoutResponse(bytes);
+  else await ble.tx.writeValue(bytes);
+}
+
+/* ---------------------------------------------------------------
+   Ninebot-/Xiaomi-UART-Protokoll (Klartext)
+   Frame:  55 AA | LEN | ADDR | CMD | ARG | PAYLOAD (LEN-2 Bytes) | CS_L CS_H
+   LEN = Payload-Länge + 2, Prüfsumme = (Summe von LEN bis Payload-Ende) XOR 0xFFFF, little-endian.
+   Lesen:  CMD 0x01, ARG = Start-Register (Byte-Offset), Payload = Anzahl Bytes.
+   Antwort: Payload = Registerinhalt ab ARG.
+   Die Registerkarte unten ist eine Annahme (M365/G30-Familie) und anpassbar.
+   --------------------------------------------------------------- */
+const NB_MAP_DEFAULT = {
+  speed:  { bank: 'esc', reg: 181, size: 2, signed: true,  scale: 0.001 },
+  tEsc:   { bank: 'esc', reg: 62,  size: 2, signed: false, scale: 0.1 },
+  pct:    { bank: 'bms', reg: 50,  size: 2, signed: false, scale: 1 },
+  current:{ bank: 'bms', reg: 51,  size: 2, signed: true,  scale: 0.01 },
+  vin:    { bank: 'bms', reg: 52,  size: 2, signed: false, scale: 0.01 },
+  tMotor: { bank: 'bms', reg: 53,  size: 1, signed: false, scale: 1, offset: -20 }
+};
+function getNbMap() {
+  try { if (S.nbmap) return { ...NB_MAP_DEFAULT, ...JSON.parse(S.nbmap) }; } catch (e) {}
+  return NB_MAP_DEFAULT;
+}
+function nbMapText(m) { return '{\n' + Object.keys(m).map(k => ' "' + k + '": ' + JSON.stringify(m[k])).join(',\n') + '\n}'; }
+
+function nbFrame(addr, cmd, arg, payload) {
+  const body = [payload.length + 2, addr, cmd, arg, ...payload];
+  let sum = 0; for (const b of body) sum += b;
+  const cs = (sum ^ 0xffff) & 0xffff;
+  return new Uint8Array([0x55, 0xaa, ...body, cs & 255, cs >> 8]);
+}
+const NB_REQS = [
+  { bank: 'esc', frame: nbFrame(0x20, 0x01, 0xb0, [0x20]) },
+  { bank: 'esc', frame: nbFrame(0x20, 0x01, 0x3e, [0x02]) },
+  { bank: 'bms', frame: nbFrame(0x22, 0x01, 0x30, [0x10]) }
+];
+
+function nbRequest(req, ms) {
+  const p = new Promise((resolve) => {
+    const timer = setTimeout(() => { ble.pending = null; ble.nbTimeouts++; resolve(false); }, ms || 300);
+    ble.pending = { bank: req.bank, done: (ok) => { clearTimeout(timer); resolve(ok); } };
+  });
+  if (ble.scanning || (ble.txLogged = (ble.txLogged || 0) + 1) <= 12) hexLog('TX', req.frame, 'Read ' + req.bank);
+  else if (ble.txLogged === 13) hexLog('INFO', 'Weitere TX-Abfragen werden nicht mehr angezeigt (nur RX).');
+  bleSend(req.frame).catch(e => {
+    if (ble.pending) { ble.pending.done(false); ble.pending = null; }
+    if (!ble.warned) { log('Schreiben fehlgeschlagen: ' + e.message); hexLog('ERR', 'Schreiben fehlgeschlagen: ' + e.message); ble.warned = true; }
+  });
+  return p;
+}
+
+async function nbCycle() {
+  for (const r of NB_REQS) {
+    if (mode !== 'ble' || ble.active !== 'ninebot') return;
+    await nbRequest(r);
+  }
+  if (!ble.nbOk && !ble.warnedNb && performance.now() - ble.tNb > 5000) {
+    ble.warnedNb = true;
+    const msg = ble.nbEs ? 'Frames mit 5A A5 gesehen (anderes Ninebot-Protokoll, nicht unterstützt).'
+      : 'Keine gültigen 55-AA-Antworten. Das Gerät antwortet nicht im Klartext (Max G3: vermutlich verschlüsselt/Authentifizierung nötig).';
+    log(msg); hexLog('ERR', msg);
+    setStatus('Verbunden – keine lesbaren Ninebot-Daten', 'warn');
+  }
+}
+
+function nbFeed(chunk) {
+  const rb = ble.nbRb;
+  for (const b of chunk) rb.push(b);
+  if (rb.length > 2048) rb.splice(0, rb.length - 2048);
+  while (rb.length >= 2) {
+    if (!(rb[0] === 0x55 && rb[1] === 0xaa)) { rb.shift(); continue; }
+    if (rb.length < 3) return;
+    const total = rb[2] + 6;
+    if (total < 8 || total > 80) { rb.shift(); continue; }
+    if (rb.length < total) return;
+    let sum = 0; for (let i = 2; i < total - 2; i++) sum += rb[i];
+    const cs = (sum ^ 0xffff) & 0xffff;
+    const rcs = rb[total - 2] | (rb[total - 1] << 8);
+    if (cs === rcs) { nbHandle(rb.splice(0, total)); }
+    else { ble.nbBad++; hexLog('ERR', 'Prüfsumme falsch: ' + hex(rb.slice(0, total)) + ' (erwartet ' + cs.toString(16) + ')'); rb.shift(); }
+  }
+}
+
+function nbHandle(f) {
+  const h = (n) => '0x' + n.toString(16).padStart(2, '0');
+  const arg = f[5], payload = f.slice(6, f.length - 2);
+  hexLog('INFO', `Frame ok: addr=${h(f[3])} cmd=${h(f[4])} reg=${h(arg)} n=${payload.length}`);
+  if (!ble.pending) return;
+  const bank = ble.pending.bank;
+  const regs = ble.regs[bank];
+  payload.forEach((v, i) => { regs[arg + i] = v; });
+  ble.pending.done(true);
+  ble.pending = null;
+  ble.nbOk++;
+  applyNb();
+}
+
+function nbVal(m) {
+  const r = ble.regs[m.bank];
+  if (!r) return null;
+  let v = 0;
+  for (let i = 0; i < m.size; i++) { const b = r[m.reg + i]; if (b === undefined) return null; v += b * Math.pow(256, i); }
+  if (m.signed) { const lim = Math.pow(256, m.size); if (v >= lim / 2) v -= lim; }
+  return v * m.scale + (m.offset || 0);
+}
+
+function applyNb() {
+  const m = getNbMap();
+  const g = (k) => (m[k] ? nbVal(m[k]) : null);
+  const sp = g('speed'), cu = g('current'), vi = g('vin'), pc = g('pct'), te = g('tEsc'), tm = g('tMotor');
+  if (sp !== null) st.speed = Math.abs(sp);
+  if (cu !== null) st.current = cu;
+  if (vi !== null) st.vin = vi;
+  if (pc !== null) st.pct = clamp(pc, 0, 100);
+  if (te !== null) st.tEsc = te;
+  if (tm !== null) st.tMotor = tm;
+  st.power = st.vin * st.current;
+  lastData = performance.now();
+  if (ble.nbOk === 1) { log('Ninebot-Daten empfangen'); setStatus('Connected: ' + (ble.device.name || 'Ninebot'), 'ok'); }
+}
+
+async function nbScan() {
+  if (mode !== 'ble' || !ble.tx) { hexLog('ERR', 'Scan: erst per Bluetooth verbinden'); return; }
+  if (ble.scanning) return;
+  ble.scanning = true;
+  while (ble.busy) await new Promise(r => setTimeout(r, 50));
+  ble.busy = true;
+  hexLog('INFO', 'Register-Scan startet (ESC 0x00-0xFF, BMS 0x00-0x7F)');
+  try {
+    for (let r = 0; r <= 0xe0; r += 0x20) await nbRequest({ bank: 'esc', frame: nbFrame(0x20, 0x01, r, [0x20]) }, 450);
+    for (let r = 0; r <= 0x60; r += 0x20) await nbRequest({ bank: 'bms', frame: nbFrame(0x22, 0x01, r, [0x20]) }, 450);
+  } finally { ble.busy = false; ble.scanning = false; hexLog('INFO', 'Register-Scan fertig, Antworten: ' + ble.nbOk); }
+}
+
+/* ---------- Polling ---------- */
+async function poll() {
+  if (!ble.tx || ble.busy || mode !== 'ble') return;
+  if (S.proto === 'auto' && ble.active === 'vesc' && ble.vescFrames === 0 && performance.now() - ble.t0 > 3000) {
+    ble.active = 'ninebot'; ble.tNb = performance.now();
+    log('Keine VESC-Antwort – wechsle auf Ninebot-Abfrage (55 AA)');
+    hexLog('INFO', 'Wechsel auf Ninebot-Abfrage');
+  }
+  if (ble.active === 'sniff') return;
+  ble.busy = true;
+  try {
+    if (ble.active === 'vesc') {
+      if (ble.vescTx++ < 3) hexLog('TX', REQ_VALUES, 'VESC GET_VALUES');
+      await bleSend(REQ_VALUES);
+    } else await nbCycle();
+  } catch (e) {
+    if (!ble.warned) { log('Schreiben fehlgeschlagen: ' + e.message); hexLog('ERR', 'Schreiben fehlgeschlagen: ' + e.message); ble.warned = true; }
+  } finally { ble.busy = false; }
+}
+
+function onData(ev) {
+  const dv = ev.target.value;
+  const bytes = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+  ble.rawCount++;
+  hexLog('RX', bytes);
+  if (bytes.length > 1 && bytes[0] === 0x5a && bytes[1] === 0xa5) ble.nbEs++;
+  nbFeed(bytes);
+  feedVesc(bytes);
+}
+
+function feedVesc(chunk) {
+  for (const b of chunk) rb.push(b);
+  if (rb.length > 4096) rb.splice(0, rb.length - 4096);
+  while (rb.length >= 3) {
+    let hdr, len;
+    if (rb[0] === 2) { hdr = 2; len = rb[1]; }
+    else if (rb[0] === 3) { hdr = 3; len = (rb[1] << 8) | rb[2]; }
+    else { rb.shift(); continue; }
+    const total = hdr + len + 3;
+    if (rb.length < total) return;
+    const payload = rb.slice(hdr, hdr + len);
+    const crc = (rb[hdr + len] << 8) | rb[hdr + len + 1];
+    if (rb[total - 1] === 3 && crc16(payload) === crc) { rb.splice(0, total); handleVesc(payload); }
+    else rb.shift();
+  }
+}
+
+function handleVesc(p) {
+  if (p[0] !== 4 || p.length < 54) return;
+  const dv = new DataView(new Uint8Array(p).buffer);
+  const iMot = dv.getInt32(5) / 100;
+  const iIn = dv.getInt32(9) / 100;
+  const duty = dv.getInt16(21) / 1000;
+  const erpm = dv.getInt32(23);
+  const vin = dv.getInt16(27) / 10;
+  const tachAbs = dv.getInt32(49);
+  const circ = Math.PI * S.wheel * 0.0254;
+  st.tEsc = dv.getInt16(1) / 10;
+  st.tMotor = dv.getInt16(3) / 10;
+  st.current = iMot;
+  st.vin = vin;
+  st.power = vin * iIn;
+  st.duty = duty * 100;
+  st.speed = Math.abs(erpm) / S.pp * circ * 60 / 1000;
+  const cv = vin / S.cells;
+  st.pct = clamp((cv - 3.2) / (4.15 - 3.2) * 100, 0, 100);
+  st.odo = Math.abs(tachAbs) / (6 * S.pp) * circ / 1000;
+  st.odoFromEsc = true;
+  ble.vescFrames++;
+  lastData = performance.now();
+  if (ble.vescFrames === 1) { log('VESC-Daten empfangen'); setStatus('Connected: ' + (ble.device.name || 'VESC'), 'ok'); }
+}
+
+function onDisc() {
+  clearInterval(ble.timer);
+  if (ble.manual || !ble.device) return;
+  if (ble.retries < 5) {
+    ble.retries++;
+    setStatus(`Verbindung weg – Versuch ${ble.retries}/5…`, 'warn');
+    log(`Verbindung verloren, Wiederverbindung ${ble.retries}/5`);
+    setTimeout(async () => {
+      if (ble.manual) return;
+      try { await bleOpen(); } catch (e) { log('Wiederverbindung: ' + e.message); onDisc(); }
+    }, 1500);
+  } else {
+    log('Wiederverbindung aufgegeben');
+    cleanupBle();
+  }
+}
+
+function cleanupBle() {
+  clearInterval(ble.timer);
+  ble.tx = null; ble.busy = false;
+  if (mode === 'ble') { mode = 'idle'; resetState(); }
+  setStatus('Not connected');
+  updateButtons();
+}
+
+function bleDisconnect(manual) {
+  ble.manual = !!manual;
+  clearInterval(ble.timer);
+  try { if (ble.device && ble.device.gatt.connected) ble.device.gatt.disconnect(); } catch (e) {}
+  log('Getrennt');
+  cleanupBle();
+}
+
+updateButtons();
+</script>
+</body>
+</html>
